@@ -15,10 +15,3 @@ install.packages(c("tidyverse", "caret", "glmnet", "randomForest", "xgboost",
 
 
 
-
-Usage
-Load the script in RStudio or any R-compatible environment.
-
-Ensure cardio_train.csv is available in the specified directory.
-
-Run the script sequentially to clean data, engineer features, and perform EDA.
