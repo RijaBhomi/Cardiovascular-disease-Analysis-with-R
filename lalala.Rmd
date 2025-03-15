@@ -1,0 +1,573 @@
+---
+title: "GroupProjectSIM"
+author: "Shrutika Ojha"
+date: "`r Sys.Date()`"
+output: word_document
+---
+
+
+
+# Installing and loading libraries
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(randomForest)
+library(xgboost)
+library(cluster)
+library(factoextra)
+library(ggplot2)
+library(kableExtra)
+library(DescTools)
+library(corrplot)
+library(ggpubr)
+library(tibble) 
+library(recipes) 
+library(rpart.plot)
+library(ROSE)
+library(gridExtra)
+```
+
+# Importing dataset
+
+```{r}
+data <- read.csv("C:\\Users\\User\\OneDrive\\Documents\\R\\cardio_train.csv", sep = ";")
+
+```
+
+# 2. Data Preprocessing
+
+**a. Displaying the structure of the data**
+```{r}
+str(data)
+```
+```{r}
+dim(data)
+```
+```{r}
+summary(data)
+```
+**Observations:**
+- We can see that the data frame contains 70000 instances and 13 variables.
+
+
+**b. Checking missing data and duplicated rows**
+```{r}
+sum(is.na(data))
+```
+```{r}
+sum(duplicated(data))
+```
+There is no missing data and duplicated rows in the dataset.
+
+**c. Converting age from days to years**
+```{r}
+data$age <- (data$age/365)
+```
+
+**d.Converting female to 0 and male to 1**
+```{r}
+data$gender<-as.numeric(data$gender-1)
+```
+
+
+# 3. Feature Engineering
+
+**a. Adding new column 'BMI'**
+BMI (Body Mass Index) is used to find whether an individual has a healthy weight for their height. The formula for BMI is:
+BMI = weight(kg)/(height(m))^2
+```{r}
+data$BMI <-round((data$weight/(data$height/100)^2), digits=2)
+```
+
+**b. Identifying Outliers**
+```{r}
+summary(data)
+```
+By interpreting the summary of the dataset, we can identify different outliers and data inconsistencies.
+1. Height and weight Outliers:
+The height columns shows minimum value 55 cm and maximum of 250 cm, which is unrealistic. And, the weight variable has minimum 10 kg and a maximum of 200kg which suggests the presence of extreme values.
+
+2. Blood Pressure Outliers:
+ap_hi (Systolic BP) has minimum of -150 and maximum of 16020 which is biologically impossible.
+ap_lo (Diastolic BP) has a minimum of -70 and maximum of 11000 which indicates error in data entry.
+
+3. BMI Outliers:
+BMI values range from 3.47 to 298.67, which is unrealistic so it needs to be filter out.
+
+
+**d. Removing extreme heights and weights**
+```{r}
+# Remove heights <120 cm or >210 cm
+data <- data %>% filter(height >= 120, height <= 210)
+
+# Remove weights <30 kg
+data <- data %>% filter(weight >= 30)
+
+```
+
+**c. Clean Blood Pressure Values**
+In Systolic blood pressure, the normal value: 120mmhg
+In Diastolic blood pressure, the normal value : 80mmhg
+
+```{r}
+# Remove systolic blood pressure (ap_hi) values that are unrealistic
+data <- data %>% filter(ap_hi >= 90, ap_hi <= 250)
+
+# Remove diastolic blood pressure (ap_lo) values that are unrealistic
+data <- data %>% filter(ap_lo >= 40, ap_lo <= 160)
+
+# Remove cases where ap_lo is greater than ap_hi
+data <- data %>% filter(ap_lo <= ap_hi)
+
+```
+
+
+**d. Removing unrealistic BMI values**
+```{r}
+# Remove extreme BMI values (>150, as they are unrealistic)
+data <- data %>% filter(BMI <= 150)
+```
+
+**e. Categorizing BMI Groups**
+```{r}
+# Add a new BMI category column
+data$BMI_Group <- cut(data$BMI, 
+                           breaks = c(0, 18.5, 23.9, 27.9, Inf), 
+                           labels = c("Underweight", "Normal", "Overweight", "Obese"))
+
+```
+
+
+**f. Adding a new column 'Pulse Pressure'**
+Pulse Pressure is the difference between systolic blood pressure(ap_hi) and diastolic blood pressure(ap_lo):
+Pulse Pressure= ap_hi - ap_lo
+
+```{r}
+# Add pulse pressure column
+data$Pulse_Pressure <- data$ap_hi - data$ap_lo
+```
+
+**g. Categorizing Age Group**
+```{r}
+data <- data %>% rename(age_years = age)
+data$Age_Group <- cut(data$age_years, 
+                      breaks = c(-Inf, 30, 40, 50, 60, 70, Inf), 
+                      labels = c("<30", "30-39", "40-49", "50-59", "60-69", "70+"),
+                      right = FALSE)
+
+
+
+```
+
+**h. Creating a Risk Score**
+Risk score is created on the basis of key factors (cholesterol, gulcose, smoking, alcohol, blood pressure)
+```{r}
+data$Risk_Score <- with(data, 
+                             cholesterol + gluc + smoke + alco + 
+                             ifelse(ap_hi > 140, 1, 0) + 
+                             ifelse(ap_lo > 90, 1, 0))
+```
+
+** Saving the cleaned dataset
+```{r}
+data_clean<-data
+write.csv(data_clean,file='data_clean.csv')
+str(data_clean)
+```
+#4. Descriptive Statistics
+The Cardiovascular Disease dataset contains Age, Height and Weight and Systolic blood pressure, Diastolic blood pressure and BMI that fall into the Interval variable category. These variables present their descriptive statistics including mean together with median and quantile Number.
+
+Data from Interval variables demonstrates two key pieces of information: the participants were aged between 30 and 65 yet maintained an average age of 53.35 years old and the median BMI reached 26.57 beyond normal level. The measurement reveals that certain respondents fall into the overweight or obese categories.
+
+```{r}
+Interval_variables<-data %>% select(age_years, height, weight, ap_hi, ap_lo ,BMI)
+summary(Interval_variables) 
+```
+#5. Frequency statistics
+
+We selected frequency statistics to analyze data from the categorical variables Gender, Cholesterol, Glucose, Smoking, Alcohol intake, Physical activity and BMI_Group.
+
+The statistical results from categorical variables show that women outnumber men by 1.8 times which demonstrates a higher female population within the data and most subjects maintain normal cholesterol and glucose levels and never smoke or drink or report positive physical functioning. On the BMI_Group the maximum number of obese individuals exists indicating obesity exists to some extent among these subjects.
+
+```{r}
+gender_labels <- c("women", "men")
+cholesterol_labels <- c("normal", "above normal", "well above normal")
+gluc_labels <- c("normal", "above normal", "well above normal")
+smoke_labels <- c("no", "yes")
+alco_labels <- c("no", "yes")
+active_labels <- c("no", "yes")
+
+data$gender <- factor(data$gender, levels = c(0, 1), labels = gender_labels)
+data$cholesterol <- factor(data$cholesterol, levels = 1:3, labels = cholesterol_labels)
+data$gluc <- factor(data$gluc, levels = 1:3, labels = gluc_labels)
+data$smoke <- factor(data$smoke, levels = 0:1, labels = smoke_labels)
+data$alco <- factor(data$alco, levels = 0:1, labels = alco_labels)
+data$active <- factor(data$active, levels = 0:1, labels = active_labels)
+
+Categorical_variables<-data %>% select(gender, cholesterol, gluc, smoke, alco, active, BMI_Group) %>% lapply(table) %>% print() 
+```
+
+#6. EDA and Visualization
+
+```{r}
+data<-read.csv("data_clean.csv")
+set.seed(123) 
+data1<-data
+head(data1,5)
+```
+
+**a. Pie chart showing proportion of patients with and without cardiovascular disease**
+
+```{r}
+data %>%
+  count(cardio) %>%
+  mutate(percentage = n / sum(n)) %>%
+  ggplot(aes(x = "", y = percentage, fill = factor(cardio, levels = c(1, 0)))) +
+  geom_bar(width = 1, stat = "identity") +
+  geom_text(aes(y = cumsum(percentage) - percentage / 2,
+                label = paste0(round(percentage * 100), "% (", n, ")")),
+            color = "black") +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = c("lightpink", "skyblue"),
+                    name = "Cardio Disease",
+                    labels = c("Yes", "No")) +
+  theme_void() +
+  ggtitle("Pie Chart of Patients with and without Cardiovascular Disease") +
+  theme(plot.title = element_text(size = 20))
+```
+
+According to the chart the patient population without cardiovascular disease consists of 34607 individuals who comprise about 50% of the total. The total figure of cardiovascular disease patients amounted to 33934 which represented 50% of the study sample. There appears a uniform distribution of data across categories which does not present any major imbalances. The evenly distributed data enables effective predictive modeling as well as accurate cardiovascular disease analysis and prediction systems.
+
+
+```{r}
+str(data)
+
+```
+**b. Histogram showing age and the target variable**
+Here, we will be grouping the ages into 5 year old intervals, and count the number of people with and without the diseases in each age group.
+
+```{r}
+age_group <- cut(data1$age, breaks = seq(30, 65, by = 5), include.lowest = TRUE, right = FALSE)
+ggplot(data1, aes(x=age_group, fill=factor(cardio))) +
+  geom_bar(position = "dodge") +
+  scale_fill_discrete(name="Cardio", labels=c("No", "Yes")) +
+  xlab("Age Group") +
+  ylab("Number of Patients") +
+  ggtitle("Bar Chart of Age Group by Cardiovascular Disease") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+We can see that, older age group(55-60, 50-55) have higher numbers of cardiovascular cases compared to younger age groups. However, in younger age groups, there are fewer cases of cardiovascular disease.
+So, age and cardiovascular disease can be interrealted. The risk of cardiovascular disease increases with age, as seen in the 50+ age groups.
+
+
+**c. Boxplot of systolic blood pressure and Diastolic blood pressure**
+```{r}
+# Boxplot for Systolic and Diastolic Blood Pressure
+ggplot(data, aes(x = factor(0))) + 
+  geom_boxplot(aes(y = ap_hi, fill = "Systolic BP"), outlier.color = "red", alpha = 0.5) +
+  geom_boxplot(aes(y = ap_lo, fill = "Diastolic BP"), outlier.color = "blue", alpha = 0.5) +
+  scale_fill_manual(values = c("Systolic BP" = "lightcoral", "Diastolic BP" = "lightblue")) +
+  labs(title = "Boxplot of Systolic and Diastolic Blood Pressure",
+       x = "Blood Pressure",
+       y = "Pressure (mmHg)",
+       fill = "Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+
+```
+The systolic BP has higher median compared to diastolic BP. Individuals with high systolic BP may be at risk of hypertension. A correlation study could be conducted to examine how systolic and diastolic BP relate.
+
+
+**d. Boxplot of height and weight **
+```{r}
+# Define the remove_outliers function
+remove_outliers <- function(data, column) {
+  Q1 <- quantile(data[[column]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(data[[column]], 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  data <- data[data[[column]] >= lower_bound & data[[column]] <= upper_bound, ]
+  return(data)
+}
+
+# Remove outliers from height and weight
+data3 <- remove_outliers(data1, "height")
+data3 <- remove_outliers(data3, "weight")
+
+# Convert cardio to a factor
+data3 <- data3 %>% mutate(cardio = factor(cardio, levels = c(0, 1), labels = c("No", "Yes")))
+
+# Create boxplots for height and weight
+p1 <- ggplot(data3, aes(x = cardio, y = height, fill = cardio)) +
+  geom_boxplot(outlier.shape = NA) +
+  labs(x = "Cardio", y = "Height") +
+  theme_minimal() +
+  scale_fill_manual(values = c("lightcoral", "#56B4E9"), name = "Cardio", labels = c("No", "Yes"))
+
+p2 <- ggplot(data3, aes(x = cardio, y = weight, fill = cardio)) +
+  geom_boxplot(outlier.shape = NA) +
+  labs(x = "Cardio", y = "Weight") +
+  theme_minimal() +
+  scale_fill_manual(values = c("lightcoral", "#56B4E9"), name = "Cardio", labels = c("No", "Yes"))
+
+# Arrange plots side by side
+grid.arrange(p1, p2, ncol = 2)
+```
+From the boxplot, we can see that individuals with cardiovascular conditions tend to have slightly higher median weight. NO major difference in height, but weight might be a more relevant factor in cardiovascular health.
+
+**e.  Bar chart of Distribution of Cholesterol Levels among Cardiovascular Disease Categories **
+
+```{r}
+p1 <- ggplot(data1, aes(x = factor(cholesterol), fill = factor(cardio))) +
+  geom_bar(position = "stack") +
+  labs(title = "Distribution of Cholesterol Levels among Cardiovascular Disease Categories",
+       x = "Cholesterol", 
+       y = "Count") +
+  theme_minimal() +
+  scale_x_discrete(labels = c("Normal", "Above Normal", "Well Above Normal")) +
+  scale_fill_discrete(name = "Cardio", labels = c("No", "Yes")) +
+  geom_text(stat = "count", aes(label = after_stat(count)), position = position_stack(vjust = 0.5))
+p1
+```
+
+So, from the above figure we can see  that in the normal level of cholesterol, the number of people without the disease is more than the number of people with the disease. However, with high level of cholestero, the number of people with disease is also increased.
+This may indicate that higher cholesterol levels are assosiated with a greater risk of cardiovascular disease.
+
+
+**e.  Bar chart of Distribution of Glucose Levels among Cardiovascular Disease Categories **
+```{r}
+p2 <- ggplot(data1, aes(x = factor(gluc), fill = factor(cardio))) +
+  geom_bar(position = "stack") +
+  labs(title = "Distribution of Glucose Levels among Cardiovascular Disease Categories",
+       x = "Glucose", 
+       y = "Count") +
+  theme_minimal() +
+  scale_x_discrete(labels = c("Normal", "Above Normal", "Well Above Normal")) +
+  scale_fill_manual(values = c("peachpuff", "lightcoral"), name = "Cardio", labels = c("No", "Yes")) +
+  geom_text(stat = "count", aes(label = after_stat(count)), position = position_stack(vjust = 0.5))
+p2
+```
+
+So, from the above figure we can see that in the normal level of Glucose, the number of people without the diesase is more than the number of people with the disease. And as the level of glucose increases from the normal, the number of people with dieases increased.
+
+
+**e.  Bar chart of BMI Groups among Cardiovascular Disease Categories. **
+```{r}
+data1$BMI_Group <- factor(data1$BMI_Group, levels = c("Underweight", "Normal", "Overweight", "Obese"))
+
+ggplot(data1, aes(x = BMI_Group, fill = factor(cardio))) +
+  geom_bar(position = "stack") +
+  geom_text(stat='count', aes(label=after_stat(count)), position=position_stack(vjust=0.5), size = 3) +
+  labs(title = "Distribution of BMI Groups among Cardiovascular Disease Categories",
+       x = "BMI Group", 
+       y = "Count") +
+  theme_minimal() +
+  scale_fill_manual(values = c("lavender", "coral"), name = "Cardio", labels = c("No", "Yes"))
+```
+
+From the above figure, we can observe that the change of BMI level, the proportion of people with cardiovascualr disease is also gradually increasing, especially in the obese level, the number of people with cardiovascular disease exceeds the number of people without the disease. 
+This shows that obesity has a greater impact on cardiovascular disease.
+
+
+
+**f. Correlation between variables and their relationship with target variable **
+```{r}
+# Select only numeric variables for correlation analysis
+numeric_data <- data %>% select(age_years, height, weight, ap_hi, ap_lo, BMI, Pulse_Pressure, Risk_Score, cardio)
+
+# Compute correlation matrix
+correlation_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Display the correlation matrix
+print(correlation_matrix)
+
+# Plot correlation heatmap
+corrplot(correlation_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45, addCoef.col = "black")
+```
+
+#Hypothesis Testing
+
+#Hypothesis 1: "People with higher weight is linked to cardiovascular disease."
+##**T-test Results Interpretation:**
+```{r}
+# Perform t-tests
+t_test_height <- t.test(height ~ cardio, data = data3, var.equal = TRUE)
+t_test_weight <- t.test(weight ~ cardio, data = data3, var.equal = TRUE)
+
+# Print results
+print(t_test_height)
+print(t_test_weight)
+
+```
+**T-Test Results Interpretation:**
+ Height & Cardiovascular Disease
+ - t= 5.0009, p-value= 5.721e-07 (which is < 0.05)
+ - Mean Height (No Cardio) = 164.46 cm, Mean Height (Yes Cardio) = 164.17 cm
+ - Conclusion: Hence, there is statistically significant difference in heigth between groups, but the difference is very small, so it is not clinically significant.
+ 
+ Weight & Cardiovascular Disease
+ - t= -45.917, p-value<2.2e-16(very significant)
+ - Mean Weight (No Cardio)=  70.88 kg, Mean Weight (Yes Cardio) = 75.22 kg
+ - Conclusion: There is a highly significant difference in weight, with individuals having cardiovascular disease being, on average 4.34 kg heavier.
+ 
+Hence, height difference is statistically significant but negligible in real-world impact. BUt weight difference is both statistically and clinically significant suggesting that higher weight is linked to cardiovascular disease.
+
+
+#Hypothesis 2: "Patients with high cholesterol and high blood pressure are significantly more likely to have CVD"
+```{r}
+# Categorize cholesterol (already categorical)
+data$cholesterol <- factor(data$cholesterol, levels = c(1, 2, 3), labels = c("Normal", "Above Normal", "High"))
+
+# Categorize systolic blood pressure
+data$bp_category <- cut(data$ap_hi, 
+                        breaks = c(-Inf, 120, 129, 139, Inf), 
+                        labels = c("Normal", "Elevated", "Hypertension Stage 1", "Hypertension Stage 2"))
+
+# Convert CVD to factor
+data$cardio <- factor(data$cardio, levels = c(0, 1), labels = c("No", "Yes"))
+
+```
+
+```{r}
+# Chi-square test for Cholesterol vs CVD
+chol_test <- chisq.test(table(data$cholesterol, data$cardio))
+chol_test
+
+# Chi-square test for Blood Pressure vs CVD
+bp_test <- chisq.test(table(data$bp_category, data$cardio))
+bp_test
+
+```
+**Chi-square test interpretation**
+**Cholesterol & CVD**
+- Chi square statistic: 3358.8
+- Degrees of Freedom (df): 2
+- p-value: <2.2e-16
+- Conclusion: Since, the p-value is extremely small, we reject the null hypothesis and conclude that there is a significant association between cholesterol levels and CVD. This means that individuals with higher cholesterol levels are more likely to have cardiovascular disease.
+
+**Blood Pressure category & CVD**
+- Chi- square statistic: 14196
+- Degrees of Freedom (df): 3
+- p-value: <2.2e-16
+- Conclusion: Again, the p-value is far below 0.05, meaning we reject the null hypothesis and conclude that blood pressure levels are significantly associated with CVD which means that people with higher blood pressure have a greater likelihood of developing cardiovascular disease.
+
+
+# Model development
+
+```{r}
+library(klaR)
+library(class)
+library(e1071)
+library(ROCR)
+library(glmnet)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(pROC)
+```
+```{r}
+data <- read.csv("data_clean.csv")
+# Convert BMI_Group to a factor
+data$BMI_Group <- as.factor(data$BMI_Group)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Split the data into training and testing sets
+index <- createDataPartition(data$cardio, p = 0.7, list = FALSE)
+
+train_data <- data[index, ]
+test_data <- data[-index, ]
+
+# Initialize objects for performance metrics, confusion matrices, and ROC objects
+performance_metrics <- data.frame()
+confusion_matrices <- list()
+roc_objects <- list()
+```
+
+
+#**Decision Tree Model**
+```{r}
+model <- rpart(cardio ~ ., data = train_data, method = "anova")
+predictions <- predict(model, test_data)
+binary_predictions <- ifelse(predictions > 0.5, 1, 0)
+accuracy <- sum(binary_predictions == test_data$cardio) / length(test_data$cardio)
+precision <- sum(binary_predictions == 1 & test_data$cardio == 1) / sum(binary_predictions == 1)
+recall <- sum(binary_predictions == 1 & test_data$cardio == 1) / sum(test_data$cardio == 1)
+f1_score <- 2 * precision * recall / (precision + recall)
+roc_obj <- roc(test_data$cardio, predictions)
+```
+```{r}
+performance_metrics <- rbind(performance_metrics, data.frame(
+  Model = "Decision Tree",
+  Accuracy = accuracy,
+  Precision = precision,
+  Recall = recall,
+  F1_Score = f1_score
+))
+confusion_matrices[["Decision Tree"]] <- table(binary_predictions, test_data$cardio)
+roc_objects[["Decision Tree"]] <- roc_obj
+```
+
+This code trains  Decision Tree Model and evlautes its performance using accuracy, precision, recall, f1- score, and ROC curve, and stores the results for comparisons with other models.
+
+
+#**Logistic Regression Model**
+```{r}
+model <- glm(cardio ~ ., data = train_data, family = binomial)
+predictions <- predict(model, newdata = test_data, type = "response")
+predicted_labels <- ifelse(predictions >= 0.5, 1, 0)
+accuracy <- sum(predicted_labels == test_data$cardio) / nrow(test_data)
+confusion_matrix <- table(predicted_labels, test_data$cardio)
+precision <- confusion_matrix[2, 2] / sum(confusion_matrix[2,])
+recall <- confusion_matrix[2, 2] / sum(confusion_matrix[, 2])
+f1_score <- 2 * precision * recall / (precision + recall)
+roc_obj <- roc(test_data$cardio, predictions)
+```
+```{r}
+performance_metrics <- rbind(performance_metrics, data.frame(
+  Model = "Logistic Regression",
+  Accuracy = accuracy,
+  Precision = precision,
+  Recall = recall,
+  F1_Score = f1_score
+))
+confusion_matrices[["Logistic Regression"]] <- confusion_matrix
+roc_objects[["Logistic Regression"]] <- roc_obj
+```
+
+This linear regression model maps linear combination of input features to probabilities between 0 and 1 and performs classification based on the probabilities. 
+
+
+# **Model Evaluation**
+
+
+```{r}
+print(performance_metrics)
+```
+
+
+```{r}
+#printing the confusion matrix for each model
+for (model in names(confusion_matrices)) {
+  print(paste("Confusion matrix for", model))
+  print(confusion_matrices[[model]])
+}
+```
+
+```{r}
+# Plot the ROC curves for all models on the same graph
+colors <- c("red", "blue", "green")  
+plot(roc_objects[[1]], main = "ROC Curves", col = colors[1])
+for (i in 2:length(roc_objects)) {
+  lines(roc_objects[[i]], col = colors[i])
+}
+legend("bottomright", legend = names(roc_objects), col = colors, lwd = 2)
+```
+
