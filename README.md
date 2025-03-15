@@ -1,36 +1,36 @@
-Overview
+# Cardiovascular Disease Analysis
 
-This project involves data preprocessing, feature engineering, exploratory data analysis (EDA), and visualization for cardiovascular disease prediction using R. The dataset used is cardio_train.csv, and the analysis focuses on identifying key health indicators linked to cardiovascular disease.
+## Overview
+This project involves data preprocessing, feature engineering, exploratory data analysis (EDA), and visualization for cardiovascular disease prediction using R. The dataset used is `cardio_train.csv`, and the analysis focuses on identifying key health indicators linked to cardiovascular disease.
 
-Prerequisites
+---
 
-Ensure you have the following libraries installed before running the code:
+## Prerequisites
+Before running the code, ensure you have the following R libraries installed:
 
+```R
 install.packages(c("tidyverse", "caret", "glmnet", "randomForest", "xgboost",
                    "cluster", "factoextra", "ggplot2", "kableExtra", "DescTools",
                    "corrplot", "ggpubr", "tibble", "recipes", "rpart.plot", "ROSE", "gridExtra"))
 
 Code Structure
-
 1. Importing and Preprocessing Data
+Load the dataset from cardio_train.csv.
 
-The dataset is loaded from a CSV file.
+Display the structure, dimensions, and summary statistics of the dataset.
 
-Structure, dimensions, and summary statistics of the dataset are displayed.
+Check for missing values and duplicate records.
 
-Missing values and duplicate records are checked.
+Perform data cleaning operations:
 
-Data cleaning operations:
+Convert age from days to years.
 
-Age is converted from days to years.
+Recode gender (female: 0, male: 1).
 
-Gender is recoded (female: 0, male: 1).
-
-Outliers in height, weight, blood pressure, and BMI are filtered.
+Filter outliers in height, weight, blood pressure, and BMI.
 
 2. Feature Engineering
-
-New Features Added:
+Add new features:
 
 BMI (Body Mass Index)
 
@@ -40,20 +40,17 @@ Age Groups (Categorized age ranges)
 
 BMI Groups (Underweight, Normal, Overweight, Obese)
 
-Risk Score based on key health indicators
+Risk Score based on key health indicators.
 
 3. Data Export
-
-The cleaned dataset is saved as data_clean.csv for further analysis.
+Save the cleaned dataset as data_clean.csv for further analysis.
 
 4. Descriptive Statistics
+Summarize interval variables like age, height, weight, and blood pressure.
 
-Interval variables like age, height, weight, and blood pressure are summarized.
-
-Frequency statistics for categorical variables such as gender, cholesterol, glucose, smoking, alcohol intake, and physical activity.
+Calculate frequency statistics for categorical variables such as gender, cholesterol, glucose, smoking, alcohol intake, and physical activity.
 
 5. Exploratory Data Analysis (EDA) & Visualizations
-
 Pie Chart: Proportion of patients with and without cardiovascular disease.
 
 Histogram: Age distribution vs. cardiovascular disease.
@@ -71,7 +68,6 @@ Cholesterol and glucose levels in relation to cardiovascular disease.
 BMI group distribution by disease status.
 
 Key Insights
-
 Older individuals (50+) have a higher prevalence of cardiovascular disease.
 
 High cholesterol and glucose levels are strongly associated with increased disease risk.
@@ -79,17 +75,8 @@ High cholesterol and glucose levels are strongly associated with increased disea
 Individuals with higher BMI (overweight/obese) tend to have a higher risk of cardiovascular disease.
 
 Usage
-
 Load the script in RStudio or any R-compatible environment.
 
 Ensure cardio_train.csv is available in the specified directory.
 
 Run the script sequentially to clean data, engineer features, and perform EDA.
-
-Future Enhancements
-
-Implement predictive modeling (Logistic Regression, Decision Trees, XGBoost).
-
-Perform advanced feature selection.
-
-Improve data visualization with interactive dashboards (e.g., Shiny or Dash for R).
