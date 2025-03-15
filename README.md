@@ -15,9 +15,9 @@ install.packages(c("tidyverse", "caret", "glmnet", "randomForest", "xgboost",
 ```
 
 
-#Code Structure
+# Code Structure
 
-##1. Importing and Preprocessing Data
+## 1. Importing and Preprocessing Data
 
 The dataset is loaded from a CSV file.
 
@@ -33,7 +33,7 @@ Gender is recoded (female: 0, male: 1).
 
 Outliers in height, weight, blood pressure, and BMI are filtered.
 
-##2. Feature Engineering
+## 2. Feature Engineering
 
 New features added:
 
@@ -47,17 +47,17 @@ BMI Groups (Underweight, Normal, Overweight, Obese)
 
 Risk Score based on key health indicators
 
-##3. Data Export
+## 3. Data Export
 
 The cleaned dataset is saved as data_clean.csv for further analysis.
 
-##4. Descriptive Statistics
+## 4. Descriptive Statistics
 
 Interval variables like age, height, weight, and blood pressure are summarized.
 
 Frequency statistics for categorical variables such as gender, cholesterol, glucose, smoking, alcohol intake, and physical activity.
 
-##5. Exploratory Data Analysis (EDA) & Visualizations
+## 5. Exploratory Data Analysis (EDA) & Visualizations
 
 Pie Chart: Proportion of patients with and without cardiovascular disease.
 
@@ -75,7 +75,7 @@ Cholesterol and glucose levels in relation to cardiovascular disease.
 
 BMI group distribution by disease status.
 
-##Key Insights
+## Key Insights
 
 Older individuals (50+) have a higher prevalence of cardiovascular disease.
 
@@ -83,7 +83,7 @@ High cholesterol and glucose levels are strongly associated with increased disea
 
 Individuals with higher BMI (overweight/obese) tend to have a higher risk of cardiovascular disease.
 
-##Usage
+## Usage
 
 Load the script in RStudio or any R-compatible environment.
 
@@ -92,7 +92,7 @@ Ensure cardio_train.csv is available in the specified directory.
 Run the script sequentially to clean data, engineer features, and perform EDA.
 
 
-##Future Enhancements
+## Future Enhancements
 
 Implement predictive modeling (Logistic Regression, Decision Trees, XGBoost).
 
